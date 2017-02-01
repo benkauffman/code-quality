@@ -145,7 +145,7 @@
                 <version>2.17</version>
                 <configuration>
                     <outputFileFormat>plain</outputFileFormat>
-                    <configLocation>google_checks.xml</configLocation>
+                    <configLocation>checkstyle_google.xml</configLocation>
                 </configuration>
             </plugin>
 

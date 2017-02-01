@@ -1,0 +1,166 @@
+apply plugin: 'pmd'
+apply plugin: 'java'
+apply plugin: 'jetty'
+apply plugin: 'groovy'
+apply plugin: 'findbugs'
+apply plugin: 'cobertura'
+apply plugin: 'checkstyle'
+
+
+
+group = 'com.some.group'
+version = '0.0.0'
+description = "Some Application Description"
+
+sourceCompatibility = 1.7
+targetCompatibility = 1.7
+
+buildscript {
+    repositories {
+        mavenLocal()
+        mavenCentral()
+    }
+    dependencies {
+        //https://github.com/stevesaliman/gradle-cobertura-plugin
+        classpath 'net.saliman:gradle-cobertura-plugin:2.3.2'
+    }
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    //applicaiton dependencies
+    compile group: 'com.some.group', name: 'some-name', version: '0.0'
+    
+    //test dependencies
+    testCompile group: 'com.some.group', name: 'some-name', version: '0.0'
+}
+
+task beforeBuild()  {
+   println("THIS TASK RUNS BEFORE THE BUILD!");
+}
+compileJava.dependsOn beforeBuild
+
+test {
+    System.setProperty('test.integration', 'false')
+    exclude '**/*IntegrationTest*'
+}
+
+
+task jettyDaemon() {
+    onlyIf {
+        'localhost'.equalsIgnoreCase(System.getProperty('integration.server', 'localhost'))
+    }
+    description = 'Starts Jetty in daemon mode'
+    group = 'web application'
+    doLast {
+        project.jettyRun.daemon = true
+    }
+
+    finalizedBy jettyRun
+}
+
+jettyRun {
+    System.setProperty('log4j.configurationFile', 'log4j2-local.xml')
+    System.setProperty('test.integration', 'false')
+
+    contextPath = '/'
+    httpPort = Integer.valueOf(8080)
+    stopPort = Integer.valueOf(8091)
+    stopKey = rootProject.name
+}
+
+jettyStop {
+    stopPort = Integer.valueOf(8091)
+    stopKey = rootProject.name
+}
+
+
+task integrationTest(type: Test) {
+
+    include '**/*IntegrationTest*'
+
+    doFirst {
+        System.setProperty('test.integration', 'true')
+        jettyRun.contextPath = '/';
+        jettyRun.httpPort = 8080    // Port for test
+        jettyRun.daemon = true
+        jettyRun.execute()
+    }
+
+    doLast {
+        System.setProperty('test.integration', 'false')
+        jettyStop.stopPort = 8091   // Port for stop signal
+        jettyStop.stopKey = 'stopKey'
+        jettyStop.execute()
+    }
+}
+
+
+checkstyle {
+    showViolations = true
+    ignoreFailures = false
+    configFile = rootProject.file('codequality/checkstyle_google.xml')
+    sourceSets = [ project.sourceSets.main ]
+}
+
+findbugs {
+    ignoreFailures = false
+    sourceSets = [ project.sourceSets.main ]
+}
+
+pmd {
+    ignoreFailures = false
+    sourceSets = [ project.sourceSets.main ]
+}
+
+tasks.withType(FindBugs) {
+    reports {
+        xml.withMessages = true
+    }
+}
+
+cobertura {
+    // https://github.com/stevesaliman/gradle-cobertura-plugin/blob/master/usage.md
+    coverageReportDir = new File("$buildDir/reports/cobertura")
+    coverageFormats = ['html', 'xml']
+    coverageIgnoreTrivial = false //getters and setters
+    coverageExcludes = []
+
+    //line coverage
+   coverageCheckLineRate = 80
+    coverageCheckPackageLineRate = 80
+    coverageCheckTotalLineRate = 70
+
+    //branch coverage
+   coverageCheckBranchRate = 80
+   coverageCheckPackageBranchRate = 80
+    coverageCheckTotalBranchRate = 80
+
+}
+test.finalizedBy(project.tasks.coberturaCheck)
+
+task checkstyleHtml {
+    group = "Verification"
+    description = "Creates a human readable Checkstyle report"
+    doLast {
+        ant.xslt(in: checkstyleMain.reports.xml.destination,
+                style: file('codequality/checkstyle-noframes-sorted.xsl'),
+                out: new File(checkstyleMain.reports.xml.destination.parent, 'main.html'))
+    }
+}
+checkstyleMain.finalizedBy checkstyleHtml
+
+task findbugsHtml {
+    group = "Verification"
+    description = "Creates a human readable Findbugs report"
+    doLast {
+        ant.xslt(in: file("$buildDir/reports/findbugs/main.xml"),
+                style: file('codequality/findbugs_default.xsl'),
+                out: new File("$buildDir/reports/findbugs/main.html"))
+    }
+}
+findbugsMain.finalizedBy findbugsHtml
