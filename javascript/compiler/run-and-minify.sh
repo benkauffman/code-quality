@@ -1,2 +1,2 @@
 #!/bin/bash
-java -jar closure-compiler.jar --js hello.js --js_output_file hello-compiled.js
+java -jar closure-compiler.jar --js_output_file compress.js --js test1.js --js test2.js
